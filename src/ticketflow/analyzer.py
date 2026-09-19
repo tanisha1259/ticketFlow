@@ -10,6 +10,7 @@ lm = dspy.LM(
     api_base="http://localhost:11434",
     api_key="ollama",
     model_type="chat",
+    temperature=0,
     think=False,
 )
 
@@ -37,25 +38,24 @@ class TicketClassification(dspy.Signature):
 
     category: str = dspy.OutputField(
         desc=(
-            "Choose exactly one: Billing, Technical, "
-            "Account, or Subscription."
+            "Output ONLY one category name: "
+            "Billing, Technical, Account, or Subscription."
         )
     )
 
     priority: str = dspy.OutputField(
         desc=(
-            "Choose exactly one: Low, Medium, or High. "
-            "Use High for financial loss, security issues, "
-            "or major service disruption. "
-            "Use Medium when normal functionality is affected. "
-            "Use Low for informational or non-urgent requests."
+            "Output ONLY one priority: "
+            "Low, Medium, or High."
         )
     )
 
     sentiment: str = dspy.OutputField(
-        desc="Choose exactly one: Positive, Neutral, or Negative."
+        desc=(
+            "Output ONLY one sentiment: "
+            "Positive, Neutral, or Negative."
+        )
     )
-
 
 class TicketClassifier(dspy.Module):
     def __init__(self):

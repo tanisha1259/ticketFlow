@@ -1,13 +1,22 @@
 import dspy
-from ticketflow.analyzer import TicketAnalyzer
 
+from analyzer import TicketClassifier
+
+
+# Smaller development set for fast iteration
 examples = [
     dspy.Example(
         ticket="I was charged twice for my subscription.",
         category="Billing",
         priority="High",
         sentiment="Negative",
-        summary="Customer reports a duplicate subscription charge.",
+    ).with_inputs("ticket"),
+
+    dspy.Example(
+        ticket="Can I get a copy of my invoice for last month?",
+        category="Billing",
+        priority="Low",
+        sentiment="Neutral",
     ).with_inputs("ticket"),
 
     dspy.Example(
@@ -15,7 +24,20 @@ examples = [
         category="Technical",
         priority="High",
         sentiment="Negative",
-        summary="Customer reports an application crash during file upload.",
+    ).with_inputs("ticket"),
+
+    dspy.Example(
+        ticket="Is there a way to enable dark mode in the application?",
+        category="Technical",
+        priority="Low",
+        sentiment="Neutral",
+    ).with_inputs("ticket"),
+
+    dspy.Example(
+        ticket="I cannot log into my account even though my password is correct.",
+        category="Account",
+        priority="Medium",
+        sentiment="Negative",
     ).with_inputs("ticket"),
 
     dspy.Example(
@@ -23,33 +45,38 @@ examples = [
         category="Account",
         priority="Low",
         sentiment="Neutral",
-        summary="Customer wants to change their account email address.",
     ).with_inputs("ticket"),
 
     dspy.Example(
-        ticket="I'd like to know how to cancel my subscription.",
+        ticket="I'd like to cancel my subscription.",
         category="Subscription",
         priority="Low",
         sentiment="Neutral",
-        summary="Customer wants instructions for cancelling their subscription.",
+    ).with_inputs("ticket"),
+
+    dspy.Example(
+        ticket="My subscription was cancelled unexpectedly.",
+        category="Subscription",
+        priority="High",
+        sentiment="Negative",
     ).with_inputs("ticket"),
 ]
 
-def ticket_metric(example, prediction, trace=None):
 
+def ticket_metric(example, prediction, trace=None):
     category_correct = (
-        example.category.lower()
-        == prediction.category.lower()
+        example.category.lower().strip()
+        == prediction.category.lower().strip()
     )
 
     priority_correct = (
-        example.priority.lower()
-        == prediction.priority.lower()
+        example.priority.lower().strip()
+        == prediction.priority.lower().strip()
     )
 
     sentiment_correct = (
-        example.sentiment.lower()
-        == prediction.sentiment.lower()
+        example.sentiment.lower().strip()
+        == prediction.sentiment.lower().strip()
     )
 
     return (
@@ -60,38 +87,55 @@ def ticket_metric(example, prediction, trace=None):
 
 
 def evaluate():
+    classifier = TicketClassifier()
 
-    analyzer = TicketAnalyzer()
+    print("\n========== CLASSIFIER EVALUATION ==========\n")
+
+    passed = 0
 
     for i, example in enumerate(examples, start=1):
+        prediction = classifier(ticket=example.ticket)
 
-        prediction = analyzer(
-            ticket=example.ticket
+        category_ok = (
+            example.category.lower().strip()
+            == prediction.category.lower().strip()
         )
 
-        print(f"\n{'=' * 60}")
-        print(f"TEST CASE {i}")
-        print(f"{'=' * 60}")
+        priority_ok = (
+            example.priority.lower().strip()
+            == prediction.priority.lower().strip()
+        )
 
-        print("\nTicket:")
-        print(example.ticket)
+        sentiment_ok = (
+            example.sentiment.lower().strip()
+            == prediction.sentiment.lower().strip()
+        )
 
-        print("\nExpected:")
-        print(f"Category:  {example.category}")
-        print(f"Priority:  {example.priority}")
-        print(f"Sentiment: {example.sentiment}")
+        case_passed = category_ok and priority_ok and sentiment_ok
 
-        print("\nPredicted:")
-        print(f"Category:  {prediction.category}")
-        print(f"Priority:  {prediction.priority}")
-        print(f"Sentiment: {prediction.sentiment}")
+        if case_passed:
+            passed += 1
 
-        print("\nMetric:")
+        print(f"Case {i}: {'PASS' if case_passed else 'FAIL'}")
+        print(f"Ticket: {example.ticket}")
         print(
-            "PASS"
-            if ticket_metric(example, prediction)
-            else "FAIL"
+            f"Expected: "
+            f"{example.category} | "
+            f"{example.priority} | "
+            f"{example.sentiment}"
         )
+        print(
+            f"Predicted: "
+            f"{prediction.category} | "
+            f"{prediction.priority} | "
+            f"{prediction.sentiment}"
+        )
+        print()
+
+    print("-------------------------------------------")
+    print(f"Score: {passed}/{len(examples)}")
+    print(f"Accuracy: {passed / len(examples) * 100:.1f}%")
+    print("===========================================")
 
 
 if __name__ == "__main__":
