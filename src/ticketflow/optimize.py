@@ -1,7 +1,8 @@
 import dspy
 
 from analyzer import TicketClassifier
-from evaluation import examples, ticket_metric
+from dataset import development_examples
+from evaluation import ticket_metric
 
 
 def main():
@@ -15,7 +16,7 @@ def main():
 
     optimized_classifier = optimizer.compile(
         classifier,
-        trainset=examples,
+        trainset=development_examples,
     )
 
     optimized_classifier.save("optimized_classifier.json")

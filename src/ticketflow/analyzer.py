@@ -39,15 +39,33 @@ class TicketClassification(dspy.Signature):
     category: str = dspy.OutputField(
         desc=(
             "Output ONLY one category name: "
-            "Billing, Technical, Account, or Subscription."
+            "Billing, Technical, Account, or Subscription.\n\n"
+            "Billing: charges, payments, invoices, refunds, duplicate charges.\n"
+            "Technical: application bugs, crashes, freezes, errors, "
+            "broken features, settings/features such as dark mode, "
+            "or the application not functioning correctly.\n"
+            "Account: login, profile details, account email, password, "
+            "account settings, or unauthorized account changes.\n"
+            "Subscription: subscribing, cancelling, changing plans, "
+            "subscription status, or a paid subscription not working "
+            "when the account itself is otherwise accessible."
         )
     )
 
     priority: str = dspy.OutputField(
         desc=(
-            "Output ONLY one priority: "
-            "Low, Medium, or High."
-        )
+            "Choose exactly one: Low, Medium, or High.\n\n"
+            "High: unauthorized access, suspected account takeover, "
+            "financial loss, duplicate/incorrect charges, security "
+            "incidents, major service outages, or a subscription/payment "
+            "failure causing significant service loss.\n"
+            "Medium: login problems, application errors, or broken "
+            "functionality that prevents normal use but is not a major "
+            "security or financial incident.\n"
+            "Low: informational questions, invoices/statements, settings "
+            "changes, updating profile information, changing subscription "
+            "plans, cancelling a subscription, or other non-urgent requests."
+        )   
     )
 
     sentiment: str = dspy.OutputField(
@@ -107,6 +125,49 @@ class TicketResponder(dspy.Module):
         )
 
 
+VALID_CATEGORIES = {
+    "billing",
+    "technical",
+    "account",
+    "subscription",
+}
+
+VALID_PRIORITIES = {
+    "low",
+    "medium",
+    "high",
+}
+
+VALID_SENTIMENTS = {
+    "positive",
+    "neutral",
+    "negative",
+}
+
+
+def normalize_value(value: str) -> str:
+    """Clean common formatting artifacts from model output."""
+    return value.strip().replace("#", "").replace("]", "").replace("[", "").strip()
+
+
+def validate_classification(classification):
+    """Validate and normalize classifier output."""
+
+    category = normalize_value(classification.category)
+    priority = normalize_value(classification.priority)
+    sentiment = normalize_value(classification.sentiment)
+
+    if category.lower() not in VALID_CATEGORIES:
+        raise ValueError(f"Invalid category returned by model: {category}")
+
+    if priority.lower() not in VALID_PRIORITIES:
+        raise ValueError(f"Invalid priority returned by model: {priority}")
+
+    if sentiment.lower() not in VALID_SENTIMENTS:
+        raise ValueError(f"Invalid sentiment returned by model: {sentiment}")
+
+    return category, priority, sentiment
+
 # -----------------------------
 # Complete TicketFlow pipeline
 # -----------------------------
@@ -121,20 +182,23 @@ class TicketAnalyzer(dspy.Module):
     def forward(self, ticket):
         classification = self.classifier(ticket)
 
+        category, priority, sentiment = validate_classification(
+            classification
+        )
+
         response = self.responder(
             ticket=ticket,
-            category=classification.category,
-            priority=classification.priority,
+            category=category,
+            priority=priority,
         )
 
         return dspy.Prediction(
-            category=classification.category,
-            priority=classification.priority,
-            sentiment=classification.sentiment,
+            category=category,
+            priority=priority,
+            sentiment=sentiment,
             summary=response.summary,
             recommended_action=response.recommended_action,
         )
-
 
 analyzer = TicketAnalyzer()
 

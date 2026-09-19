@@ -2,29 +2,39 @@ from analyzer import analyze_ticket
 
 
 def main():
-    ticket = """
-    I was charged twice for my monthly subscription.
-    The first payment went through successfully, but
-    I was charged again a few minutes later.
-    I have not received a refund and I need this
-    resolved quickly.
-    """
+    print("\n========== TicketFlow ==========")
+    print("Enter a customer support ticket.")
+    print("Type 'exit' to quit.\n")
 
-    result = analyze_ticket(ticket)
+    while True:
+        ticket = input("Ticket: ").strip()
 
-    print("\n========== TICKET ANALYSIS ==========\n")
+        if ticket.lower() == "exit":
+            print("\nGoodbye!")
+            break
 
-    print(f"Category: {result.category}")
-    print(f"Priority: {result.priority}")
-    print(f"Sentiment: {result.sentiment}")
+        if not ticket:
+            print("Please enter a ticket.\n")
+            continue
 
-    print("\nSummary:")
-    print(result.summary)
+        try:
+            result = analyze_ticket(ticket)
 
-    print("\nRecommended Action:")
-    print(result.recommended_action)
+            print("\n---------- Analysis ----------")
+            print(f"Category: {result.category}")
+            print(f"Priority: {result.priority}")
+            print(f"Sentiment: {result.sentiment}")
 
-    print("\n=====================================")
+            print("\nSummary:")
+            print(result.summary)
+
+            print("\nRecommended Action:")
+            print(result.recommended_action)
+
+            print("------------------------------\n")
+
+        except ValueError as error:
+            print(f"\nUnable to analyze ticket: {error}\n")
 
 
 if __name__ == "__main__":
