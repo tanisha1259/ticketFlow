@@ -1,8 +1,7 @@
-from ticketflow.analyzer import analyze_ticket
+from analyzer import analyze_ticket
 
 
 def main():
-
     ticket = """
     I was charged twice for my monthly subscription.
     The first payment went through successfully, but
@@ -22,7 +21,10 @@ def main():
     print("\nSummary:")
     print(result.summary)
 
-    print("\n=====================================\n")
+    print("\nRecommended Action:")
+    print(result.recommended_action)
+
+    print("\n=====================================")
 
 
 if __name__ == "__main__":
