@@ -58,6 +58,20 @@ development_examples = [
         priority="High",
         sentiment="Negative",
     ).with_inputs("ticket"),
+
+    dspy.Example(
+        ticket="What are your customer support hours?",
+        category="General",
+        priority="Low",
+        sentiment="Neutral",
+    ).with_inputs("ticket"),
+
+    dspy.Example(
+        ticket="Can I speak with a human support agent?",
+        category="General",
+        priority="Low",
+        sentiment="Neutral",
+    ).with_inputs("ticket"),
 ]
 
 
@@ -117,5 +131,26 @@ test_examples = [
         category="Subscription",
         priority="High",
         sentiment="Negative",
+    ).with_inputs("ticket"),
+
+    dspy.Example(
+        ticket="Where can I find information about your company?",
+        category="General",
+        priority="Low",
+        sentiment="Neutral",
+    ).with_inputs("ticket"),
+
+    dspy.Example(
+        ticket="How do I contact someone from your support team?",
+        category="General",
+        priority="Low",
+        sentiment="Neutral",
+    ).with_inputs("ticket"),
+
+    dspy.Example(
+        ticket="What time is your customer service available?",
+        category="General",
+        priority="Low",
+        sentiment="Neutral",
     ).with_inputs("ticket"),
 ]

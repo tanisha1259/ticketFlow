@@ -4,10 +4,10 @@ A local AI-powered customer support ticket analyzer built with **DSPy**, **Ollam
 
 TicketFlow takes a customer support ticket and produces:
 
-* **Category** — Billing, Technical, Account, or Subscription
+* **Category** — Billing, Technical, Account, Subscription, or General
 * **Priority** — Low, Medium, or High
 * **Sentiment** — Positive, Neutral, or Negative
-* **Summary** — concise description of the issue
+* **Summary** — concise description of the customer's request
 * **Recommended Action** — suggested next step for the support team
 
 The entire inference pipeline runs locally through Ollama.
@@ -39,7 +39,7 @@ Customer Support Ticket
       Final Analysis
 ```
 
-### Model stack
+### Model Stack
 
 ```text
 Application
@@ -56,32 +56,17 @@ Ollama API
 
 ---
 
-## Why DSPy?
-
-Instead of manually constructing a large prompt, TicketFlow defines structured DSPy signatures for classification and response generation.
-
-DSPy manages the interaction between the program and the language model while allowing the application to define:
-
-* expected inputs
-* expected outputs
-* task instructions
-* reusable modules
-* optimization workflows
-
-The project also includes a small DSPy optimization experiment using `BootstrapFewShot`.
-
----
-
 ## Features
 
-### Structured classification
+### Structured Classification
 
-Tickets are classified into four categories:
+Tickets are classified into five categories:
 
 * Billing
 * Technical
 * Account
 * Subscription
+* General
 
 Priority is classified as:
 
@@ -95,15 +80,24 @@ Sentiment is classified as:
 * Neutral
 * Negative
 
-### Output validation
+### Response Generation
 
-Model output is validated before it enters the response-generation stage.
+After classification, TicketFlow generates:
+
+* A concise ticket summary
+* A recommended next action for the support team
+
+For general informational requests, the responder is instructed not to invent company-specific information.
+
+### Output Validation
+
+Model output is validated before being returned by the application.
 
 Invalid category, priority, or sentiment values raise an error instead of silently propagating malformed model output.
 
-Common formatting artifacts are also normalized before validation.
+Response generation also includes validation against empty or placeholder outputs.
 
-### Local inference
+### Local Inference
 
 The project uses:
 
@@ -113,26 +107,64 @@ The project uses:
 
 No external LLM API is required for inference.
 
+### Batch Processing
+
+TicketFlow can process multiple tickets from a JSON file and save the results as JSON.
+
+Example input:
+
+```json
+[
+  "I was charged twice for my subscription.",
+  "I'd like to update the email linked to my profile.",
+  "What are your customer support hours?"
+]
+```
+
+Run:
+
+```bash
+uv run python -m ticketflow.batch tickets.json -o results.json
+```
+
+The batch processor supports both sequential and optional concurrent execution.
+
+---
+
+## Why DSPy?
+
+Instead of manually constructing a large prompt, TicketFlow defines structured DSPy signatures for classification and response generation.
+
+DSPy allows the application to define:
+
+* Expected inputs
+* Expected outputs
+* Task instructions
+* Reusable modules
+* Optimization workflows
+
+The project also includes a small DSPy `BootstrapFewShot` optimization experiment.
+
 ---
 
 ## Evaluation
 
 The project uses separate development and held-out test examples.
 
-The development set is used for experimentation and DSPy optimization.
+The development set is used for experimentation and DSPy optimization. The held-out test set is used to evaluate the classifier.
 
-The held-out test set contains 8 paraphrased examples that are not used for optimization.
+The current held-out test set contains **11 examples** covering the supported categories and several common ticket types.
 
-After improving the classification instructions, the current held-out evaluation produced:
+The latest evaluation produced:
 
 ```text
-Score:    7/8
-Accuracy: 87.5%
+Score:    9/11
+Accuracy: 81.8%
 ```
 
-The remaining error was a priority distinction for an application upload failure. Category and sentiment were correctly predicted for that case.
+The evaluation set is intentionally small, so this result should be treated as a project-level validation result rather than a statistically representative benchmark.
 
-Because the evaluation set is intentionally small, the 87.5% result should be treated as a project-level validation result rather than a statistically representative benchmark.
+The classifier was tested on categories including Billing, Technical, Account, Subscription, and General.
 
 ---
 
@@ -140,8 +172,10 @@ Because the evaluation set is intentionally small, the 87.5% result should be tr
 
 TicketFlow also contains an experimental `BootstrapFewShot` optimization workflow.
 
+Run:
+
 ```bash
-uv run python src/ticketflow/optimize.py
+uv run python -m ticketflow.optimize
 ```
 
 The resulting optimized classifier is saved as:
@@ -150,9 +184,9 @@ The resulting optimized classifier is saved as:
 optimized_classifier.json
 ```
 
-The experiment did **not** demonstrate a consistent improvement over the original classifier, so the optimized classifier is not used as the default production pipeline.
+The optimization experiment did **not** demonstrate a consistent improvement over the original classifier, so the optimized classifier is not used by the default application pipeline.
 
-This keeps the main application based on the simpler, explicitly validated classifier while retaining the optimization experiment for future work.
+The artifact is retained as an experiment for future investigation.
 
 ---
 
@@ -179,7 +213,7 @@ ollama list
 
 ## Installation
 
-Clone the repository and enter the project directory:
+Clone the repository:
 
 ```bash
 git clone https://github.com/tanisha1259/ticketFlow.git
@@ -193,7 +227,7 @@ uv venv
 uv sync
 ```
 
-Activate the environment if desired:
+Activate the environment if desired.
 
 ### Git Bash
 
@@ -208,7 +242,7 @@ source .venv/Scripts/activate
 Start the interactive application:
 
 ```bash
-uv run python src/ticketflow/main.py
+uv run python -m ticketflow.main
 ```
 
 Example:
@@ -221,20 +255,48 @@ Type 'exit' to quit.
 Ticket: I was charged twice for my subscription.
 
 ---------- Analysis ----------
-Category: Billing
-Priority: High
-Sentiment: Negative
-
-Summary:
-Customer reports being charged twice for their subscription.
-
-Recommended Action:
-Investigate the duplicate transaction and initiate the appropriate
-refund process.
+{
+  "ticket": "I was charged twice for my subscription.",
+  "category": "Billing",
+  "priority": "High",
+  "sentiment": "Negative",
+  "summary": "Customer reports receiving two charges for their subscription.",
+  "recommended_action": "Investigate payment records to identify duplicate charges and contact the customer to resolve the issue."
+}
 ------------------------------
 ```
 
 Type `exit` to stop the application.
+
+---
+
+## Running Batch Analysis
+
+Create a JSON file containing a list of tickets:
+
+```json
+[
+  "I was charged twice for my subscription.",
+  "I'd like to update the email linked to my profile.",
+  "What are your customer support hours?"
+]
+```
+
+Then run:
+
+```bash
+uv run python -m ticketflow.batch tickets.json -o results.json
+```
+
+For optional concurrent processing:
+
+```bash
+uv run python -m ticketflow.batch tickets.json -o results.json --concurrent --workers 2
+```
+
+The generated `results.json` contains the structured analysis for each ticket.
+
+Generated result files are excluded from version control through `.gitignore`.
 
 ---
 
@@ -243,7 +305,7 @@ Type `exit` to stop the application.
 Run the held-out classifier evaluation:
 
 ```bash
-uv run python src/ticketflow/evaluation.py
+uv run python -m ticketflow.evaluation
 ```
 
 The evaluation reports individual predictions and the overall exact-match accuracy.
@@ -253,7 +315,7 @@ The evaluation reports individual predictions and the overall exact-match accura
 ## Running the DSPy Optimization Experiment
 
 ```bash
-uv run python src/ticketflow/optimize.py
+uv run python -m ticketflow.optimize
 ```
 
 This compiles the classifier using the development examples and saves:
@@ -275,11 +337,13 @@ ticketFlow/
 │   └── ticketflow/
 │       ├── __init__.py
 │       ├── analyzer.py
+│       ├── batch.py
 │       ├── dataset.py
 │       ├── evaluation.py
 │       ├── main.py
 │       └── optimize.py
 │
+├── tickets.json
 ├── optimized_classifier.json
 ├── .python-version
 ├── pyproject.toml
@@ -288,7 +352,7 @@ ticketFlow/
 └── .gitignore
 ```
 
-### File responsibilities
+### File Responsibilities
 
 **`analyzer.py`**
 
@@ -300,30 +364,35 @@ Contains separate development and held-out test examples.
 
 **`evaluation.py`**
 
-Runs the classifier against the held-out test set.
+Runs the classifier against the held-out test set and calculates the exact-match evaluation score.
 
 **`optimize.py`**
 
 Runs the experimental DSPy `BootstrapFewShot` optimization.
 
+**`batch.py`**
+
+Loads tickets from a JSON file, processes them through TicketFlow, and saves structured results.
+
 **`main.py`**
 
 Provides the interactive command-line interface.
+
+**`tickets.json`**
+
+Provides a small example batch of customer support tickets.
 
 ---
 
 ## Future Extensions
 
-Potential next steps include:
+Potential future improvements include:
 
-* Multi-stage support-ticket workflows
-* Tool-using support agents
-* LangGraph-based agent orchestration
 * Retrieval from support documentation
-* Batch ticket processing
-* Structured JSON/API output
-* Model serving with vLLM or SGLang
-* Quantized model experiments
+* Tool-using support workflows
+* API-based access to TicketFlow
 * Evaluation on a larger real-world support-ticket dataset
+* More robust response grounding
+* Improved model serving and inference performance
 
-These extensions are intentionally outside the current MVP. The current implementation focuses on a reliable local DSPy → Ollama → Qwen3 pipeline.
+These extensions are outside the current application. The current implementation focuses on a functional local DSPy → Ollama → Qwen3 support-ticket analysis pipeline.

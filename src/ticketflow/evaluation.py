@@ -1,7 +1,7 @@
 import dspy
 
-from analyzer import TicketClassifier
-from dataset import test_examples
+from .analyzer import TicketClassifier
+from .dataset import test_examples
 
 
 def ticket_metric(example, prediction, trace=None):

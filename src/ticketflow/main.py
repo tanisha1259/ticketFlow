@@ -1,4 +1,4 @@
-from analyzer import analyze_ticket
+from .analyzer import analyze_ticket
 
 
 def main():
@@ -21,16 +21,7 @@ def main():
             result = analyze_ticket(ticket)
 
             print("\n---------- Analysis ----------")
-            print(f"Category: {result.category}")
-            print(f"Priority: {result.priority}")
-            print(f"Sentiment: {result.sentiment}")
-
-            print("\nSummary:")
-            print(result.summary)
-
-            print("\nRecommended Action:")
-            print(result.recommended_action)
-
+            print(result.to_json())
             print("------------------------------\n")
 
         except ValueError as error:

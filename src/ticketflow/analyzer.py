@@ -1,5 +1,9 @@
 import dspy
 
+import json
+from dataclasses import asdict, dataclass
+
+import time
 
 # -----------------------------
 # Ollama + Qwen3 configuration
@@ -30,6 +34,7 @@ class TicketClassification(dspy.Signature):
     - Technical: bugs, crashes, errors, broken functionality
     - Account: profile, login, email, account settings
     - Subscription: subscribing, cancelling, changing subscription
+    - General: questions or requests that do not clearly belong to the other four categories
     """
 
     ticket: str = dspy.InputField(
@@ -39,39 +44,69 @@ class TicketClassification(dspy.Signature):
     category: str = dspy.OutputField(
         desc=(
             "Output ONLY one category name: "
-            "Billing, Technical, Account, or Subscription.\n\n"
-            "Billing: charges, payments, invoices, refunds, duplicate charges.\n"
+            "Billing, Technical, Account, Subscription, or General.\n\n"
+
+            "Billing: charges, payments, invoices, refunds, duplicate "
+            "charges, or other payment-related issues.\n"
+
             "Technical: application bugs, crashes, freezes, errors, "
-            "broken features, settings/features such as dark mode, "
-            "or the application not functioning correctly.\n"
+            "broken features, dark mode problems, upload failures, or "
+            "the application not functioning correctly.\n"
+
             "Account: login, profile details, account email, password, "
             "account settings, or unauthorized account changes.\n"
+
             "Subscription: subscribing, cancelling, changing plans, "
             "subscription status, or a paid subscription not working "
-            "when the account itself is otherwise accessible."
+            "when the account itself is otherwise accessible.\n"
+
+            "General: questions or requests that do not clearly belong "
+            "to Billing, Technical, Account, or Subscription. Examples "
+            "include support hours, company information, contacting a "
+            "human agent, or other general questions.\n\n"
+
+            "Choose General when none of the four specialized categories "
+            "clearly applies. Do not force a ticket into a specialized "
+            "category."
         )
     )
 
     priority: str = dspy.OutputField(
         desc=(
             "Choose exactly one: Low, Medium, or High.\n\n"
-            "High: unauthorized access, suspected account takeover, "
-            "financial loss, duplicate/incorrect charges, security "
-            "incidents, major service outages, or a subscription/payment "
-            "failure causing significant service loss.\n"
-            "Medium: login problems, application errors, or broken "
-            "functionality that prevents normal use but is not a major "
-            "security or financial incident.\n"
+
+            "High: unauthorized account access, suspected account takeover, "
+            "financial loss, duplicate or incorrect charges, security "
+            "incidents, major service outages, or a payment/subscription "
+            "failure that prevents the customer from receiving a paid service.\n"
+
+            "Medium: login problems, application errors, crashes, freezes, "
+            "or broken functionality that prevents normal use but is not "
+            "a major security, financial, or service-loss incident.\n"
+
             "Low: informational questions, invoices/statements, settings "
             "changes, updating profile information, changing subscription "
-            "plans, cancelling a subscription, or other non-urgent requests."
-        )   
+            "plans, cancelling a subscription, or other non-urgent requests.\n\n"
+
+            "If the customer reports a complete failure of a paid service "
+            "or an important application function, prefer High when the "
+            "failure prevents normal use."
+        )
     )
 
     sentiment: str = dspy.OutputField(
         desc=(
-            "Output ONLY one sentiment: "
-            "Positive, Neutral, or Negative."
+            "Output ONLY one sentiment: Positive, Neutral, or Negative.\n\n"
+
+            "Negative: the customer reports a problem, failure, error, "
+            "loss, unauthorized action, frustration, or inability to use "
+            "a service.\n"
+
+            "Neutral: the customer is asking an informational question "
+            "or requesting a normal change without reporting a problem.\n"
+
+            "Positive: the customer expresses satisfaction, praise, "
+            "thanks, or a clearly positive experience."
         )
     )
 
@@ -89,7 +124,7 @@ class TicketClassifier(dspy.Module):
 # -----------------------------
 
 class TicketResponseSignature(dspy.Signature):
-    """Generate a useful response plan for a support ticket."""
+    """Generate a concise support response plan."""
 
     ticket: str = dspy.InputField(
         desc="The customer's support request."
@@ -104,11 +139,11 @@ class TicketResponseSignature(dspy.Signature):
     )
 
     summary: str = dspy.OutputField(
-        desc="A concise summary of the customer's issue."
+        desc="One short sentence summarizing the customer's request."
     )
 
     recommended_action: str = dspy.OutputField(
-        desc="The recommended next action for the support team."
+        desc="One short sentence describing the next action for support."
     )
 
 
@@ -123,13 +158,15 @@ class TicketResponder(dspy.Module):
             category=category,
             priority=priority,
         )
-
+        summary, recommended_action = validate_response(response)
+        total_time = time.perf_counter() - total_start
 
 VALID_CATEGORIES = {
     "billing",
     "technical",
     "account",
     "subscription",
+    "general",
 }
 
 VALID_PRIORITIES = {
@@ -168,6 +205,49 @@ def validate_classification(classification):
 
     return category, priority, sentiment
 
+def validate_response(response):
+    """Validate responder output and reject placeholder text."""
+
+    summary = response.summary.strip()
+    recommended_action = response.recommended_action.strip()
+
+    invalid_values = {
+        "",
+        "[summary text]",
+        "[recommended action text]",
+        "{summary}",
+        "{recommended_action}",
+    }
+
+    if summary.lower() in {value.lower() for value in invalid_values}:
+        raise ValueError("Model returned an invalid summary.")
+
+    if recommended_action.lower() in {
+        value.lower() for value in invalid_values
+    }:
+        raise ValueError("Model returned an invalid recommended action.")
+
+    return summary, recommended_action
+
+# -----------------------------
+# Structured application result
+# -----------------------------
+
+@dataclass
+class TicketResult:
+    ticket: str
+    category: str
+    priority: str
+    sentiment: str
+    summary: str
+    recommended_action: str
+
+    def to_dict(self):
+        return asdict(self)
+
+    def to_json(self):
+        return json.dumps(self.to_dict(), indent=2)
+
 # -----------------------------
 # Complete TicketFlow pipeline
 # -----------------------------
@@ -180,11 +260,16 @@ class TicketAnalyzer(dspy.Module):
         self.responder = TicketResponder()
 
     def forward(self, ticket):
+        total_start = time.perf_counter()
+        classification_start = time.perf_counter()
         classification = self.classifier(ticket)
+        classification_time = time.perf_counter() - classification_start
 
         category, priority, sentiment = validate_classification(
             classification
         )
+
+        response_start = time.perf_counter()
 
         response = self.responder(
             ticket=ticket,
@@ -192,12 +277,23 @@ class TicketAnalyzer(dspy.Module):
             priority=priority,
         )
 
-        return dspy.Prediction(
+        summary, recommended_action = validate_response(response)
+        response_time = time.perf_counter() - response_start
+        total_time = time.perf_counter() - total_start
+
+        print(
+            f"\n[Timing] Classification: {classification_time:.2f}s | "
+            f"Response: {response_time:.2f}s | "
+            f"Total: {total_time:.2f}s"
+        )
+
+        return TicketResult(
+            ticket=ticket,
             category=category,
             priority=priority,
             sentiment=sentiment,
-            summary=response.summary,
-            recommended_action=response.recommended_action,
+            summary=summary,
+            recommended_action=recommended_action,
         )
 
 analyzer = TicketAnalyzer()
